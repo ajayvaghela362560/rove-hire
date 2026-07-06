@@ -253,17 +253,27 @@ function Info({
   value?: string | null;
   href?: string;
 }) {
+  // For links, show a cleaner label (strip protocol / trailing slash) but keep the full URL.
+  const display = href && value ? value.replace(/^https?:\/\/(www\.)?/, "").replace(/\/+$/, "") : value;
   return (
     <div className="flex items-start gap-2.5">
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">{label}</p>
         {href ? (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="truncate text-sm text-primary hover:underline">
-            {value ?? "—"}
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={value ?? undefined}
+            className="block truncate text-sm text-primary hover:underline"
+          >
+            {display ?? "—"}
           </a>
         ) : (
-          <p className="truncate text-sm font-medium">{value ?? "—"}</p>
+          <p className="truncate text-sm font-medium" title={value ?? undefined}>
+            {value ?? "—"}
+          </p>
         )}
       </div>
     </div>
