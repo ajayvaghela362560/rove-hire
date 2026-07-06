@@ -1,1 +1,7 @@
+# Allow dependency install scripts to run (Prisma engine, esbuild/sharp binaries).
+# Without this, pnpm 10+ skips them and warns during install.
 dangerouslyAllowAllBuilds: true
+
+# Force a single, patched postcss across the tree (Next pins an older transitive one).
+overrides:
+  postcss: "^8.5.16"
