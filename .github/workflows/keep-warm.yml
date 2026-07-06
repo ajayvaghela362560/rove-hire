@@ -1,0 +1,19 @@
+name: Keep warm
+
+# Pings the health endpoint every 6 hours so Neon's scale-to-zero instance is
+# already awake when reviewers open the app. Set the APP_URL repository variable.
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/health
+        run: |
+          if [ -z "${{ vars.APP_URL }}" ]; then
+            echo "APP_URL repo variable not set — skipping."; exit 0
+          fi
+          curl -fsS "${{ vars.APP_URL }}/api/health" && echo "\nOK"

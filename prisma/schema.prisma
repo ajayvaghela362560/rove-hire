@@ -1,0 +1,231 @@
+// ROVE Hire — data model.
+// PostgreSQL (Neon). Pooled URL for the app, direct URL for migrations.
+// Invariants enforced here (enums, unique keys, FKs) back the application-layer
+// state machine so an illegal row cannot be persisted even by a buggy code path.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
+}
+
+enum CandidateStatus {
+  APPLIED
+  FORM_SUBMITTED
+  INTERVIEW_SCHEDULED
+  OFFER_SENT
+  HIRED
+  REJECTED
+}
+
+enum InterviewType {
+  SCREENING
+  TECHNICAL
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum FeedbackVerdict {
+  HIRE
+  NO_HIRE
+  MAYBE
+}
+
+enum DocumentKind {
+  RESUME
+  OFFER_LETTER
+  NDA
+}
+
+enum TimelineEventType {
+  CANDIDATE_CREATED
+  FORM_SUBMITTED
+  LINK_REGENERATED
+  INTERVIEW_SCHEDULED
+  INTERVIEW_COMPLETED
+  FEEDBACK_RECORDED
+  OFFER_GENERATED
+  HIRED
+  REJECTED
+}
+
+enum Actor {
+  HR
+  CANDIDATE
+  SYSTEM
+}
+
+model HrUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String    @map("password_hash")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  sessions     Session[]
+
+  @@map("hr_users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique @map("token_hash")
+  hrUserId  String   @map("hr_user_id")
+  hrUser    HrUser   @relation(fields: [hrUserId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([hrUserId])
+  @@map("sessions")
+}
+
+model Job {
+  id          String      @id @default(cuid())
+  title       String
+  description String      @map("description_md") // markdown, rendered sanitized
+  skills      String[]
+  status      JobStatus   @default(OPEN)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  candidates  Candidate[]
+
+  @@index([status])
+  @@map("jobs")
+}
+
+model Candidate {
+  id     String          @id @default(cuid())
+  jobId  String          @map("job_id")
+  job    Job             @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  name   String
+  email  String
+  status CandidateStatus @default(APPLIED)
+
+  // Application-form fields — null until the candidate submits the public form.
+  phone              String?
+  location           String?
+  currentRole        String? @map("current_role")
+  noticePeriod       String? @map("notice_period")
+  salaryExpectation  String? @map("salary_expectation")
+  linkedinUrl        String? @map("linkedin_url")
+
+  rejectionReason String?  @map("rejection_reason")
+  // Denormalized for dashboard sort; written only inside the same tx as a timeline event.
+  lastActivityAt  DateTime @default(now()) @map("last_activity_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tokens    ApplicationToken[]
+  interviews Interview[]
+  offers     Offer[]
+  documents  Document[]
+  events     TimelineEvent[]
+
+  // One candidate record == one application to one opening.
+  @@unique([jobId, email])
+  @@index([status, lastActivityAt(sort: Desc)])
+  @@map("candidates")
+}
+
+model ApplicationToken {
+  id          String    @id @default(cuid())
+  candidateId String    @map("candidate_id")
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique @map("token_hash") // sha256 of the raw 256-bit token
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([candidateId])
+  @@map("application_tokens")
+}
+
+model Interview {
+  id             String          @id @default(cuid())
+  candidateId    String          @map("candidate_id")
+  candidate      Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  scheduledAt    DateTime        @map("scheduled_at")
+  type           InterviewType
+  interviewerName String         @map("interviewer_name")
+  notes          String?
+  status         InterviewStatus @default(SCHEDULED)
+  completedAt    DateTime?       @map("completed_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  feedback       Feedback?
+
+  @@index([scheduledAt])
+  @@index([candidateId])
+  @@map("interviews")
+}
+
+model Feedback {
+  id          String          @id @default(cuid())
+  interviewId String          @unique @map("interview_id") // 1:1 — double-submit becomes a constraint violation
+  interview   Interview       @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  verdict     FeedbackVerdict
+  note        String
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  @@map("feedback")
+}
+
+model Offer {
+  id               String     @id @default(cuid())
+  candidateId      String     @map("candidate_id")
+  candidate        Candidate  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  roleTitle        String     @map("role_title")
+  salaryAmount     Int        @map("salary_amount") // minor units (e.g. cents) — no float error
+  salaryCurrency   String     @map("salary_currency")
+  startDate        DateTime   @map("start_date") @db.Date
+  reportingManager String     @map("reporting_manager")
+  workLocation     String     @map("work_location")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  documents        Document[]
+
+  @@index([candidateId])
+  @@map("offers")
+}
+
+model Document {
+  id          String       @id @default(cuid())
+  candidateId String       @map("candidate_id")
+  candidate   Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  offerId     String?      @map("offer_id")
+  offer       Offer?       @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  kind        DocumentKind
+  s3Key       String       @unique @map("s3_key")
+  fileName    String       @map("file_name")
+  mimeType    String       @map("mime_type")
+  sizeBytes   Int          @map("size_bytes")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  @@index([candidateId])
+  @@map("documents")
+}
+
+model TimelineEvent {
+  id          String            @id @default(cuid())
+  candidateId String            @map("candidate_id")
+  candidate   Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  type        TimelineEventType
+  actor       Actor             @default(HR)
+  // Render snapshot (interviewer name, verdict, offer terms, rejection reason, …)
+  payload     Json?
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@index([candidateId, createdAt(sort: Desc)])
+  @@map("timeline_events")
+}
