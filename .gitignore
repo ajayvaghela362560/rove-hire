@@ -37,4 +37,4 @@ yarn-error.log*
 /prisma/*.db
 
 # personal notes (kept local, not part of the project)
-/docs/interview-prep.md
+/docs
