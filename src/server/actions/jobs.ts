@@ -13,7 +13,7 @@ export async function createJobAction(input: unknown): Promise<ActionResult<{ id
 
   const job = await prisma.job.create({ data: parsed.data });
   revalidatePath("/jobs");
-  revalidatePath("/candidates/new");
+  revalidatePath("/candidates");
   return ok({ id: job.id });
 }
 
@@ -25,7 +25,7 @@ export async function updateJobAction(id: string, input: unknown): Promise<Actio
   await prisma.job.update({ where: { id }, data: parsed.data });
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${id}`);
-  revalidatePath("/candidates/new");
+  revalidatePath("/candidates");
   return ok();
 }
 
@@ -38,6 +38,6 @@ export async function setJobStatusAction(
   await prisma.job.update({ where: { id }, data: { status } });
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${id}`);
-  revalidatePath("/candidates/new");
+  revalidatePath("/candidates");
   return ok();
 }

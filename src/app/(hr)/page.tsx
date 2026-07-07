@@ -1,52 +1,31 @@
 import Link from "next/link";
-import type { CandidateStatus, Prisma } from "@prisma/client";
-import { Users, ChevronRight } from "lucide-react";
+import type { CandidateStatus } from "@prisma/client";
+import { ArrowRight, CalendarClock } from "lucide-react";
 import { prisma } from "@/server/db/prisma";
 import { PageHeader } from "@/components/common/page-header";
-import { EmptyState } from "@/components/common/empty-state";
 import { StatusBadge } from "@/components/common/status-badge";
-import { DashboardFilters } from "@/components/dashboard/filters";
-import { ALL_CANDIDATE_STATUSES } from "@/lib/status";
-import { relativeTime } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { INTERVIEW_TYPE_LABEL } from "@/lib/status";
+import { relativeTime, formatDateTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-function parseStatus(value?: string): CandidateStatus | undefined {
-  return ALL_CANDIDATE_STATUSES.includes(value as CandidateStatus)
-    ? (value as CandidateStatus)
-    : undefined;
-}
-
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string; status?: string }>;
-}) {
-  const { q, status } = await searchParams;
-  const statusFilter = parseStatus(status);
-  const query = q?.trim();
-
-  const where: Prisma.CandidateWhereInput = {
-    ...(statusFilter ? { status: statusFilter } : {}),
-    ...(query
-      ? {
-          OR: [
-            { name: { contains: query, mode: "insensitive" } },
-            { email: { contains: query, mode: "insensitive" } },
-            { job: { title: { contains: query, mode: "insensitive" } } },
-          ],
-        }
-      : {}),
-  };
-
-  const [candidates, total, byStatus] = await Promise.all([
-    prisma.candidate.findMany({
-      where,
-      include: { job: { select: { title: true } } },
-      orderBy: { lastActivityAt: "desc" },
-    }),
+export default async function DashboardPage() {
+  const now = new Date();
+  const [total, byStatus, recent, upcoming] = await Promise.all([
     prisma.candidate.count(),
     prisma.candidate.groupBy({ by: ["status"], _count: true }),
+    prisma.candidate.findMany({
+      orderBy: { lastActivityAt: "desc" },
+      take: 6,
+      include: { job: { select: { title: true } } },
+    }),
+    prisma.interview.findMany({
+      where: { status: "SCHEDULED", scheduledAt: { gte: now } },
+      orderBy: { scheduledAt: "asc" },
+      take: 5,
+      include: { candidate: { select: { id: true, name: true } } },
+    }),
   ]);
 
   const count = (s: CandidateStatus) => byStatus.find((b) => b.status === s)?._count ?? 0;
@@ -55,10 +34,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Candidates"
-        description="Every candidate in the pipeline, most recently active first."
-      />
+      <PageHeader title="Dashboard" description="An overview of your hiring pipeline." />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Total candidates" value={total} />
@@ -67,61 +43,72 @@ export default async function DashboardPage({
         <Stat label="Hired" value={count("HIRED")} />
       </div>
 
-      <DashboardFilters />
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Recent candidates */}
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm">Recent activity</CardTitle>
+            <Link href="/candidates" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+              View all <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            {recent.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">No candidates yet.</p>
+            ) : (
+              recent.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/candidates/${c.id}`}
+                  className="flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent/50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{c.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {c.job.title} · {relativeTime(c.lastActivityAt)}
+                    </p>
+                  </div>
+                  <StatusBadge status={c.status} />
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
 
-      {candidates.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title={total === 0 ? "No candidates yet" : "No candidates match your filters"}
-          description={
-            total === 0
-              ? "Add your first candidate to start tracking them through the pipeline."
-              : "Try clearing the search or selecting a different status."
-          }
-        />
-      ) : (
-        <div className="overflow-hidden rounded-xl border bg-background">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3 font-medium">Candidate</th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">Role</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">Last activity</th>
-                <th className="w-8 px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {candidates.map((c) => (
-                <tr key={c.id} className="group border-b last:border-0 transition-colors hover:bg-accent/50">
-                  <td className="px-4 py-3">
-                    <Link href={`/candidates/${c.id}`} className="block">
-                      <span className="font-medium text-foreground">{c.name}</span>
-                      <span className="block text-xs text-muted-foreground">{c.email}</span>
-                    </Link>
-                  </td>
-                  <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{c.job.title}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-                    {relativeTime(c.lastActivityAt)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/candidates/${c.id}`}
-                      className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                      aria-label={`Open ${c.name}`}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        {/* Upcoming interviews */}
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm">Upcoming interviews</CardTitle>
+            <Link href="/interviews" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+              View all <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            {upcoming.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">No upcoming interviews.</p>
+            ) : (
+              upcoming.map((iv) => (
+                <Link
+                  key={iv.id}
+                  href={`/candidates/${iv.candidate.id}`}
+                  className="flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent/50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{iv.candidate.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {INTERVIEW_TYPE_LABEL[iv.type]} · {iv.interviewerName}
+                    </p>
+                  </div>
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    {formatDateTime(iv.scheduledAt)}
+                  </span>
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

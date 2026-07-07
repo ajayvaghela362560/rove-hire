@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { requireSession } from "@/server/auth/require-session";
 import { logoutAction } from "@/server/actions/auth";
 import { Logo } from "@/components/common/logo";
@@ -21,13 +21,6 @@ export default async function HrLayout({ children }: { children: React.ReactNode
         <div className="flex-1 p-3">
           <NavLinks />
         </div>
-        <div className="border-t p-3">
-          <Button asChild className="w-full" size="sm">
-            <Link href="/candidates/new">
-              <Plus /> Add Candidate
-            </Link>
-          </Button>
-        </div>
       </aside>
 
       {/* Main column */}
@@ -40,11 +33,6 @@ export default async function HrLayout({ children }: { children: React.ReactNode
           </div>
           <div className="hidden flex-1 lg:block" />
           <div className="flex items-center gap-3">
-            <Button asChild variant="outline" size="sm" className="lg:hidden">
-              <Link href="/candidates/new">
-                <Plus /> Add
-              </Link>
-            </Button>
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium leading-tight">{user.name}</p>
               <p className="text-xs text-muted-foreground">{user.email}</p>
