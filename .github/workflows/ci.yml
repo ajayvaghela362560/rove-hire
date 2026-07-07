@@ -11,9 +11,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+      # pnpm 11.8.0 (pinned via package.json "packageManager") requires Node >= 22.13.
+      # It uses the node:sqlite built-in, which does not exist on Node 20, so every
+      # pnpm invocation aborts there — including setup-node's `cache: pnpm` step.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
