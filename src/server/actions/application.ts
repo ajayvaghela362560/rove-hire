@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { TimelineEventType, Actor, CandidateStatus } from "@prisma/client";
 import { applicationSchema } from "@/lib/validation/schemas";
 import { prisma } from "@/server/db/prisma";
@@ -54,8 +53,9 @@ export async function submitApplicationAction(
       return fail(msg);
     }
 
-    revalidatePath(`/candidates/${candidateId}`);
-    revalidatePath("/");
+    // No revalidatePath here: in a server action it also refreshes the caller's
+    // current route, so /apply/[token] would re-render as "used" and replace the
+    // candidate's success screen. HR pages are force-dynamic and always fetch fresh.
     logger.info("application.submitted", { candidateId });
     return ok();
   } catch (e) {
