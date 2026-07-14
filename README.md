@@ -135,7 +135,9 @@ so it works against any S3-compatible store such as Cloudflare R2.
 ---
 
 ## Deployment guide
-1. **Database (Neon):** create a project; copy the **pooled** connection string into `DATABASE_URL` (keep `?pgbouncer=true`) and the **direct** one into `DIRECT_URL`.
+1. **Database:** the app runs on serverless (Vercel), so `DATABASE_URL` **must go through a connection pooler (PgBouncer)** — a direct Postgres URL will exhaust connection slots (`too many clients` / `remaining connection slots are reserved for SUPERUSER`). Add `connection_limit=1` so each function instance keeps a tiny pool.
+   - **Neon:** copy the **pooled** connection string (`*-pooler` host) into `DATABASE_URL` (keep `?pgbouncer=true&connection_limit=1`) and the **direct** one into `DIRECT_URL`.
+   - **Aiven:** enable **Connection pooling** (PgBouncer, transaction mode) in the console to get a **separate pooler port**; put the **pooler** URL in `DATABASE_URL` (`?sslmode=require&pgbouncer=true&connection_limit=1`) and the **raw** Postgres port URL in `DIRECT_URL`.
 2. **Storage (S3):** create a private bucket. Add a CORS rule allowing `POST`/`GET` from your app origin (needed for browser presigned uploads). Create an IAM user with `PutObject`/`GetObject`/`HeadObject` on the bucket.
 3. **Vercel:** import the repo, set all env vars from `.env.example` (set `APP_URL` to the deployed URL — magic links are built from it), and deploy. `pnpm build` runs `prisma generate` automatically.
 4. **Migrate + seed** (once, from your machine against prod): `pnpm db:migrate && pnpm db:seed`.
