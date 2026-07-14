@@ -8,6 +8,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swa
 export const metadata: Metadata = {
   title: { default: "ROVE Hire", template: "%s · ROVE Hire" },
   description: "Internal recruitment tool for the ROVE HR team.",
+  // Internal tool with candidate PII — keep it out of every search index.
+  robots: { index: false, follow: false, nocache: true },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

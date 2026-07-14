@@ -25,5 +25,10 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // Exclude Next's internals and public metadata files (favicon, icons, robots,
+  // sitemap). Without excluding robots.txt/sitemap.xml the auth redirect below
+  // would bounce crawlers to /login and they'd never see the Disallow rules.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };
