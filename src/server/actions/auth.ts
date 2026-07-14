@@ -28,7 +28,13 @@ export async function loginAction(
 
   await createSession(user.id);
   logger.info("login.success", { userId: user.id });
-  const dest = next && next.startsWith("/") ? next : "/";
+  // Only allow same-site relative paths. Reject protocol-relative ("//evil.com")
+  // and backslash-normalised ("/\evil.com") targets, which browsers treat as
+  // absolute URLs — otherwise `next` is an open redirect.
+  const dest =
+    next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\")
+      ? next
+      : "/";
   redirect(dest);
   return ok();
 }
